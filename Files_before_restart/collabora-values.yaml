@@ -1,0 +1,26 @@
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: collabora.ewe-netz-backup.de
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: collabora-tls
+      hosts:
+        - collabora.ewe-netz-backup.de
+
+livenessProbe:
+  enabled: false
+readinessProbe:
+  enabled: false
+
+extraEnv:
+  - name: "aliasgroup1"
+    value: "https://collabora.ewe-netz-backup.de"
+  - name: "server_name"
+    value: "collabora.ewe-netz-backup.de"
+  - name: "domain"
+    value: "nextcloud\\.ewe-netz-backup\\.de"
+
