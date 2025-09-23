@@ -1,0 +1,39 @@
+# collabora-values.yaml
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$arg_WOPISrc"
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header X-Forwarded-Proto https; 
+      proxy_set_header X-Forwarded-Ssl on;      
+      proxy_set_header X-Forwarded-Port 443;
+      proxy_set_header X-Forwarded-Host $host;
+  hosts:
+    - host: collabora.ewe-netz-backup.de
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls:
+    - secretName: collabora-tls
+      hosts:
+        - collabora.ewe-netz-backup.de
+
+# Probes notfalls aus, wenn sie dir früher Ärger gemacht haben
+livenessProbe:
+  enabled: false
+readinessProbe:
+  enabled: false
+
+collabora:
+  aliasgroups:
+    - host: "https://nextcloud.ewe-netz-backup.de:443"
+  server_name: "collabora.ewe-netz-backup.de:443"
+  extra_params: "--o:ssl.enable=false --o:ssl.termination=true --o:num_prespawn_children=4"
+

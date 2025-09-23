@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nextcloud-talk-hpb
+  namespace: nextcloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nextcloud-talk-hpb
+  template:
+    metadata:
+      labels:
+        app: nextcloud-talk-hpb
+    spec:
+      containers:
+        - name: talk-hpb
+          image: ghcr.io/nextcloud-releases/aio-talk:latest
+          env:
+            - name: NC_DOMAIN
+              value: "nextcloud.ewe-netz-backup.de"
+            - name: TALK_HOST
+              value: "signaling.ewe-netz-backup.de"
+            - name: TALK_PORT
+              value: "3478"
+            - name: TURN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: talk-hpb-secrets
+                  key: TURN_SECRET
+            - name: SIGNALING_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: talk-hpb-secrets
+                  key: SIGNALING_SECRET
+            - name: INTERNAL_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: talk-hpb-secrets
+                  key: INTERNAL_SECRET
+          ports:
+            - containerPort: 8081 # API / HTTP
+            - containerPort: 3478 # TURN/STUN TCP
+            - containerPort: 3478 # TURN/STUN UDP
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+

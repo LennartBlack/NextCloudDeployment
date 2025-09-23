@@ -1,0 +1,1 @@
+eksctl create cluster --name nextcloudcluster --version 1.29 --region eu-central-1 --nodegroup-name nextcloudnodes --node-type t3.medium --nodes 2 --nodes-min 2 --nodes-max 2 --managed --with-oidc --tags "project=nextcloud"

@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nextcloud-mariadb
+  namespace: nextcloud
+spec:
+  selector:
+    matchLabels:
+      app: nextcloud-mariadb
+  serviceName: "nextcloud-mariadb"
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: nextcloud-mariadb
+    spec:
+      securityContext:
+        fsGroup: 1001
+      containers:
+      - name: mariadb
+        image: mariadb:11.4
+        env:
+        - name: MARIADB_ROOT_PASSWORD
+          value: rootpass123
+        - name: MYSQL_DATABASE
+          value: nextcloud
+        - name: MYSQL_USER
+          value: nextcloud
+        - name: MYSQL_PASSWORD
+          value: nextcloud123  
+        ports:
+        - containerPort: 3306
+          name: mysql
+        volumeMounts:
+        - name: mariadb-data
+          mountPath: /var/lib/mysql
+        - name: initdb
+          mountPath: /docker-entrypoint-initdb.d/
+          readOnly: true
+      volumes:
+      - name: initdb
+        configMap:
+          name: mariadb-init-script
+          items:
+            - key: init.sql
+              path: init.sql
+  volumeClaimTemplates:
+  - metadata:
+      name: mariadb-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 5Gi
+      storageClassName: gp3
+
