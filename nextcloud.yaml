@@ -49,6 +49,7 @@ spec:
               
 
               # Installiere Collabora App
+              echo "Installiere Collabora App..."
               php /var/www/html/occ app:install richdocuments || true
               php /var/www/html/occ app:enable richdocuments || true
               
@@ -56,16 +57,22 @@ spec:
               php /var/www/html/occ app:install spreed || true
               php /var/www/html/occ app:enable spreed || true
 
-              # Konfiguriere Collabora-Server
-              php /var/www/html/occ config:app:set richdocuments wopi_url --value="http://collabora.nextcloud.svc.cluster.local:9980"
+              # Konfiguriere Collabora-Server (HTTPS!)
+              echo "Konfiguriere Collabora..."
+              php /var/www/html/occ config:app:set richdocuments wopi_url --value="https://192.168.178.63:30981"
+              php /var/www/html/occ config:app:set richdocuments disable_certificate_verification --value="yes"
 
               # HPB Signaling Server konfigurieren
-              php /var/www/html/occ config:app:set spreed signaling_servers --value='[{"server":"https://192.168.178.63:30444","verify":false}]'
+              echo "Konfiguriere HPB Signaling Server..."
+              php /var/www/html/occ config:app:set spreed signaling_servers --value='{"servers":[{"server":"https://192.168.178.63:30444","verify":false}],"secret":"495bc2e029ac8e5cd461a910bb7f48d10a10ece20e4de36f4b3ea8ed7cea029f"}'
               
-              cho "Konfiguriere Talk App - TURN Server..."
-              php /var/www/html/occ config:app:set spreed turn_servers --value='[{"schemes":"turn","server":"192.168.178.63","port":"30478","secret":"0d3e50717c9fff2263babeec3a8b3b86e33252822162642cb35a758087fb76e0","protocols":"udp,tcp"}]'
-              
-              echo "Collabora konfiguriert!"
+              echo "Setze Talk internal secret..."
+              php /var/www/html/occ config:app:set spreed internal_secret --value="90474c17177e328fc2289a1004354f9d7264aab953f642b23e3a4eac7e7b0fb7"
+
+              echo "Konfiguriere Talk App - TURN Server..."
+              php /var/www/html/occ config:app:set spreed turn_servers --value='[{"schemes":"turn","server":"192.168.178.63:30478","secret":"0d3e50717c9fff2263babeec3a8b3b86e33252822162642cb35a758087fb76e0","protocols":"udp,tcp"}]'
+
+              echo "Konfiguration abgeschlossen!"
           volumeMounts:
             - name: html
               mountPath: /var/www/html

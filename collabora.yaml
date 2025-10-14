@@ -22,22 +22,22 @@ spec:
             - containerPort: 9980
               name: collabora
           env:
-            # WICHTIG: Erlaubte Nextcloud-Domains
+            # WICHTIG: Erlaubte Nextcloud-Domains - HTTPS auf Port 30443
             - name: aliasgroup1
-              value: "http://192.168.178.63:30080"
+              value: "https://192.168.178.63:30443"
             
             # Server-Name für externe Erreichbarkeit
             - name: server_name
               value: "192.168.178.63:30981"
             
-            # SSL deaktivieren
+            # SSL deaktivieren (wird durch NGINX Proxy gehandhabt)
             - name: extra_params
-              value: "--o:ssl.enable=false --o:ssl.termination=false"
+              value: "--o:ssl.enable=false --o:ssl.termination=true"
             
             - name: DONT_GEN_SSL_CERT
               value: "true"
             
-            # Admin-Konsole (optional)
+            # Admin-Konsole
             - name: username
               value: admin
             - name: password
@@ -67,11 +67,10 @@ metadata:
   labels:
     app: collabora
 spec:
-  type: NodePort
+  type: ClusterIP  # Änderung: ClusterIP statt NodePort
   selector:
     app: collabora
   ports:
     - name: collabora
       port: 9980
       targetPort: 9980
-      nodePort: 30981  # Externer Port

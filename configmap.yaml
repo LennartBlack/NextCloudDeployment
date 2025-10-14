@@ -24,7 +24,7 @@ data:
     <?php
     $CONFIG = array (
       'richdocuments' => array(
-        'wopi_url' => 'http://192.168.178.63:30981',
+        'wopi_url' => 'https://192.168.178.63:30981',
       ),
     );
 ---
@@ -218,7 +218,7 @@ data:
     debug = true
     
     [backend]
-    allowed = 192.168.178.63:30443
+    allowed = https://192.168.178.63:30443
     secret = 495bc2e029ac8e5cd461a910bb7f48d10a10ece20e4de36f4b3ea8ed7cea029f
     timeout = 10
     connecttimeout = 10
@@ -226,10 +226,64 @@ data:
     
     [sessions]
     hashkey = 90474c17177e328fc2289a1004354f9d7264aab953f642b23e3a4eac7e7b0fb7
-    
+    blockkey = 90474c17177e328fc2289a1004354f9d7264aab953f642b23e3a4eac7e7b0fb7
+
     [clients]
     internalsecret = 90474c17177e328fc2289a1004354f9d7264aab953f642b23e3a4eac7e7b0fb7
 
       
     [nats]
     url = nats://nats.nextcloud.svc.cluster.local:4222
+---
+---
+# Collabora NGINX Proxy Config
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: collabora-nginx-config
+  namespace: nextcloud
+data:
+  nginx.conf: |
+    events {
+      worker_connections 1024;
+    }
+
+    http {
+      upstream collabora {
+        server collabora.nextcloud.svc.cluster.local:9980;
+      }
+
+      server {
+        listen 443 ssl;
+        server_name _;
+
+        ssl_certificate /etc/nginx/ssl/tls.crt;
+        ssl_certificate_key /etc/nginx/ssl/tls.key;
+        
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+
+        # Wichtig für Collabora: Große Dateien
+        client_max_body_size 0;
+        proxy_request_buffering off;
+
+        location / {
+          proxy_pass http://collabora;
+          proxy_http_version 1.1;
+          
+          # WebSocket Support für Collabora
+          proxy_set_header Upgrade $http_upgrade;
+          proxy_set_header Connection "upgrade";
+          
+          proxy_set_header Host $http_host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto https;
+          
+          # Timeouts für lange Verbindungen
+          proxy_read_timeout 36000s;
+          proxy_connect_timeout 60s;
+          proxy_send_timeout 36000s;
+        }
+      }
+    }
