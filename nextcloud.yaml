@@ -33,6 +33,20 @@ spec:
                 sleep 5
               done
               
+              php /var/www/html/occ config:app:set spreed signaling_mode --value="external"
+              
+              echo "Konfiguriere Trusted Proxies..."
+              php /var/www/html/occ config:system:set trusted_proxies 0 --value="10.0.0.0/8"
+              php /var/www/html/occ config:system:set trusted_proxies 1 --value="172.16.0.0/12"
+              php /var/www/html/occ config:system:set trusted_proxies 2 --value="192.168.0.0/16"
+              php /var/www/html/occ config:system:set forwarded_for_headers 0 --value="HTTP_X_FORWARDED_FOR"
+              
+              echo "Konfiguriere Trusted Domains..."
+              php /var/www/html/occ config:system:set trusted_domains 0 --value="192.168.178.63:30443"
+              php /var/www/html/occ config:system:set trusted_domains 1 --value="localhost"
+              php /var/www/html/occ config:system:set trusted_domains 2 --value="nextcloud.nextcloud.svc.cluster.local"
+              
+
               # Installiere Collabora App
               php /var/www/html/occ app:install richdocuments || true
               php /var/www/html/occ app:enable richdocuments || true
@@ -41,19 +55,6 @@ spec:
               php /var/www/html/occ app:install spreed || true
               php /var/www/html/occ app:enable spreed || true
 
-              echo "Konfiguriere Talk HPB..."
-              php /var/www/html/occ config:app:set spreed signaling_mode --value="external"
-              # KORREKTUR: Richtiges JSON-Format mit "servers" und "secret" Keys
-              php /var/www/html/occ config:app:set spreed signaling_servers --value='{"servers":[{"server":"http://192.168.178.63:30081","verify":false}],"secret":"495bc2e029ac8e5cd461a910bb7f48d10a10ece20e4de36f4b3ea8ed7cea029f"}'
-              
-              # Konfiguriere TURN Server
-              echo "Konfiguriere TURN Server..."
-              php /var/www/html/occ config:app:set spreed turn_servers --value='[{"schemes":"turn,turns","server":"192.168.178.63","port":"30478","secret":"0d3e50717c9fff2263babeec3a8b3b86e33252822162642cb35a758087fb76e0","protocols":"udp,tcp"}]'
-               
-              # Konfiguriere STUN Server
-              echo "Konfiguriere STUN Server..."
-              php /var/www/html/occ config:app:set spreed stun_servers --value='["192.168.178.63:30478"]'
-              
               # Konfiguriere Collabora-Server
               php /var/www/html/occ config:app:set richdocuments wopi_url --value="http://collabora.nextcloud.svc.cluster.local:9980"
               
@@ -92,13 +93,13 @@ spec:
             
             # Automatische Installation aktivieren
             - name: NEXTCLOUD_TRUSTED_DOMAINS
-              value: "192.168.178.63:30080 localhost nextcloud.nextcloud.svc.cluster.local"
+              value: "192.168.178.63:30443 localhost nextcloud.nextcloud.svc.cluster.local"
             - name: OVERWRITEHOST
-              value: "192.168.178.63:30080"
+              value: "192.168.178.63:30443"
             - name: OVERWRITEPROTOCOL
-              value: "http"
+              value: "https"
             - name: OVERWRITECLIURL
-              value: "http://192.168.178.63:30080"
+              value: "https://192.168.178.63:30443"
             
             # Redis-Konfiguration
             - name: REDIS_HOST
@@ -164,10 +165,9 @@ metadata:
   name: nextcloud
   namespace: nextcloud
 spec:
-  type: NodePort
+  type: ClusterIP  
   selector:
     app: nextcloud
   ports:
     - port: 80
       targetPort: 80
-      nodePort: 30080

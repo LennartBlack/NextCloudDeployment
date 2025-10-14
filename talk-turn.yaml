@@ -1,39 +1,87 @@
-# Talk TURN Service (TCP)
+# TURN Server (coturn) Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coturn
+  namespace: nextcloud
+  labels:
+    app: coturn
+    app.kubernetes.io/name: nextcloud
+    app.kubernetes.io/component: turn
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: coturn
+  template:
+    metadata:
+      labels:
+        app: coturn
+    spec:
+      containers:
+        - name: coturn
+          image: coturn/coturn:latest
+          command: ["turnserver"]
+          args: ["-c", "/etc/coturn/turnserver.conf"]
+          ports:
+            - containerPort: 3478
+              name: turn-tcp
+              protocol: TCP
+            - containerPort: 3478
+              name: turn-udp
+              protocol: UDP
+            - containerPort: 5349
+              name: turns-tcp
+              protocol: TCP
+            - containerPort: 5349
+              name: turns-udp
+              protocol: UDP
+          volumeMounts:
+            - name: coturn-config
+              mountPath: /etc/coturn
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: coturn-config
+          configMap:
+            name: coturn-config
+---
+# TURN Server Service (NodePort für externen Zugriff)
 apiVersion: v1
 kind: Service
 metadata:
-  name: nextcloud-talk-turn-tcp
+  name: coturn
   namespace: nextcloud
   labels:
-    app: nextcloud-talk-hpb
-    component: turn-tcp
+    app: coturn
 spec:
   type: NodePort
   selector:
-    app: nextcloud-talk-hpb
+    app: coturn
   ports:
     - name: turn-tcp
       port: 3478
       targetPort: 3478
       nodePort: 30478
       protocol: TCP
----
-# Talk TURN Service (UDP)
-apiVersion: v1
-kind: Service
-metadata:
-  name: nextcloud-talk-turn-udp
-  namespace: nextcloud
-  labels:
-    app: nextcloud-talk-hpb
-    component: turn-udp
-spec:
-  type: NodePort
-  selector:
-    app: nextcloud-talk-hpb
-  ports:
     - name: turn-udp
       port: 3478
       targetPort: 3478
       nodePort: 30478
+      protocol: UDP
+    - name: turns-tcp
+      port: 5349
+      targetPort: 5349
+      nodePort: 30479
+      protocol: TCP
+    - name: turns-udp
+      port: 5349
+      targetPort: 5349
+      nodePort: 30479
       protocol: UDP

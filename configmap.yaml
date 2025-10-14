@@ -27,6 +27,7 @@ data:
         'wopi_url' => 'http://192.168.178.63:30981',
       ),
     );
+---
 # Nextcloud Talk App Konfiguration (ConfigMap)
 apiVersion: v1
 kind: ConfigMap
@@ -48,3 +49,187 @@ data:
         ),
       ),
     );
+---
+# nginx-reverse-proxy.yaml (KORRIGIERT)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: nextcloud
+data:
+  nginx.conf: |
+    events {
+      worker_connections 1024;
+    }
+
+    http {
+      upstream nextcloud {
+        server nextcloud.nextcloud.svc.cluster.local:80;
+      }
+
+      # HTTP Server - Redirect zu HTTPS
+      server {
+        listen 80;
+        server_name _;
+        
+        # Redirect zu HTTPS auf Port 30443
+        return 301 https://$host:30443$request_uri;
+      }
+
+      # HTTPS Server
+      server {
+        listen 443 ssl;
+        server_name _;
+
+        ssl_certificate /etc/nginx/ssl/tls.crt;
+        ssl_certificate_key /etc/nginx/ssl/tls.key;
+        
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+
+        client_max_body_size 10G;
+        client_body_buffer_size 400M;
+        
+        add_header Strict-Transport-Security "max-age=15768000; includeSubDomains; preload;" always;
+
+        location / {
+          proxy_pass http://nextcloud;
+          
+          # WICHTIG: Überschreibe Host-Header
+          proxy_set_header Host $http_host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto https;
+          proxy_set_header X-Forwarded-Host $http_host;
+          proxy_set_header X-Forwarded-Port 30443;
+          
+          # Nextcloud-spezifisch
+          proxy_redirect off;
+          proxy_buffering off;
+          proxy_request_buffering off;
+          proxy_max_temp_file_size 0;
+          
+          proxy_connect_timeout 3600;
+          proxy_send_timeout 3600;
+          proxy_read_timeout 3600;
+        }
+      }
+    }
+---
+# talk-hpb-nginx-proxy.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: talk-hpb-nginx-config
+  namespace: nextcloud
+data:
+  nginx.conf: |
+    events {
+      worker_connections 1024;
+    }
+
+    http {
+      upstream talk-hpb {
+        server nextcloud-talk-hpb.nextcloud.svc.cluster.local:8080;
+      }
+
+      server {
+        listen 443 ssl;
+        server_name _;
+
+        ssl_certificate /etc/nginx/ssl/tls.crt;
+        ssl_certificate_key /etc/nginx/ssl/tls.key;
+        
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+
+        location / {
+          proxy_pass http://talk-hpb;
+          proxy_http_version 1.1;
+          
+          # WebSocket Support - KRITISCH!
+          proxy_set_header Upgrade $http_upgrade;
+          proxy_set_header Connection "upgrade";
+          
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto https;
+          
+          proxy_read_timeout 86400;
+          proxy_connect_timeout 60;
+          proxy_send_timeout 60;
+        }
+      }
+    }
+---
+# coturn Konfiguration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coturn-config
+  namespace: nextcloud
+data:
+  turnserver.conf: |
+    # Listening ports
+    listening-port=3478
+    tls-listening-port=5349
+    
+    external-ip=192.168.178.63
+    
+    # Relay-Ports für Media
+    min-port=49152
+    max-port=65535
+    
+    # Authentication
+    use-auth-secret
+    static-auth-secret=0d3e50717c9fff2263babeec3a8b3b86e33252822162642cb35a758087fb76e0
+    
+    # Realm
+    realm=nextcloud
+    
+    # Logging
+    verbose
+    log-file=/var/log/turnserver.log
+    
+    # Performance
+    fingerprint
+    lt-cred-mech
+    
+    # Sicherheit
+    no-multicast-peers
+    no-cli
+    no-loopback-peers
+    no-stdout-log
+    
+---
+# HPB Signaling Server Konfiguration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: talk-hpb-signaling-config
+  namespace: nextcloud
+data:
+  server.conf: |
+    [http]
+    listen = 0.0.0.0:8080
+    
+    [app]
+    debug = true
+    
+    [backend]
+    allowed = 192.168.178.63:30443
+    secret = 495bc2e029ac8e5cd461a910bb7f48d10a10ece20e4de36f4b3ea8ed7cea029f
+    timeout = 10
+    connecttimeout = 10
+    skipverify = true
+    
+    [sessions]
+    hashkey = 90474c17177e328fc2289a1004354f9d7264aab953f642b23e3a4eac7e7b0fb7
+    
+    [clients]
+    internalsecret = 90474c17177e328fc2289a1004354f9d7264aab953f642b23e3a4eac7e7b0fb7
+
+      
+    [nats]
+    url = nats://nats.nextcloud.svc.cluster.local:4222

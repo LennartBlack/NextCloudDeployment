@@ -1,4 +1,4 @@
-# Talk HPB Deployment
+# Nextcloud Talk High Performance Backend (HPB) Deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,6 +6,8 @@ metadata:
   namespace: nextcloud
   labels:
     app: nextcloud-talk-hpb
+    app.kubernetes.io/name: nextcloud
+    app.kubernetes.io/component: talk-hpb
 spec:
   replicas: 1
   selector:
@@ -17,75 +19,46 @@ spec:
         app: nextcloud-talk-hpb
     spec:
       containers:
-        - name: talk-hpb
-          image: ghcr.io/nextcloud-releases/aio-talk:latest
-          env:
-            # Nextcloud Domain (deine externe IP/Domain)
-            - name: NC_DOMAIN
-              value: "nextcloud.nextcloud.svc.cluster.local"
-            # WICHTIG: Erzwinge HTTP statt HTTPS
-            - name: SKIP_VERIFY
-              value: "true"
-              
-            # Talk/Signaling Host (deine externe IP)
-            - name: TALK_HOST
-              value: "192.168.178.63"
-            
-            # TURN Port
-            - name: TALK_PORT
-              value: "30478"
-            
-            # Secrets
-            - name: TURN_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: talk-hpb-secrets
-                  key: TURN_SECRET
-            - name: SIGNALING_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: talk-hpb-secrets
-                  key: SIGNALING_SECRET
-            - name: INTERNAL_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: talk-hpb-secrets
-                  key: INTERNAL_SECRET
-          
+        - name: signaling
+          image: strukturag/nextcloud-spreed-signaling:latest
+          command: ["/usr/bin/nextcloud-spreed-signaling"]
+          args: ["--config", "/config/server.conf"]
           ports:
-            - name: http
-              containerPort: 8081
-              protocol: TCP
-            - name: turn-tcp
-              containerPort: 3478
-              protocol: TCP
-            - name: turn-udp
-              containerPort: 3478
-              protocol: UDP
-          
+            - containerPort: 8080
+              name: http
+            - containerPort: 8081
+              name: signaling
+          volumeMounts:
+            - name: signaling-config
+              mountPath: /config
+              readOnly: true
           resources:
             requests:
-              cpu: "250m"
-              memory: "512Mi"
+              cpu: 100m
+              memory: 256Mi
             limits:
-              cpu: "1000m"
-              memory: "2Gi"
-          
+              cpu: 1000m
+              memory: 1Gi
           livenessProbe:
-            httpGet:
-              path: /api/v1/welcome
-              port: 8081
+            tcpSocket:
+              port: 8080
             initialDelaySeconds: 30
-            periodSeconds: 30
-          
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
           readinessProbe:
-            httpGet:
-              path: /api/v1/welcome
-              port: 8081
+            tcpSocket:
+              port: 8080
             initialDelaySeconds: 10
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: signaling-config
+          configMap:
+            name: talk-hpb-signaling-config
 ---
-# Talk HPB Service (HTTP API)
+# HPB Service (ClusterIP für internen Zugriff)
 apiVersion: v1
 kind: Service
 metadata:
@@ -94,12 +67,15 @@ metadata:
   labels:
     app: nextcloud-talk-hpb
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: nextcloud-talk-hpb
   ports:
     - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+    - name: signaling
       port: 8081
       targetPort: 8081
-      nodePort: 30081
       protocol: TCP
