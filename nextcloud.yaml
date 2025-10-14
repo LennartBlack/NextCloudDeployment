@@ -1,0 +1,173 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nextcloud
+  namespace: nextcloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nextcloud
+  template:
+    metadata:
+      labels:
+        app: nextcloud
+    spec:
+      initContainers:
+        - name: fix-permissions
+          image: busybox
+          command: ["sh", "-c", "chown -R 33:33 /var/www/html"]
+          volumeMounts:
+            - name: html
+              mountPath: /var/www/html
+        
+        - name: install-collabora-app
+          image: nextcloud:31.0.4-apache
+          command: 
+            - sh
+            - -c
+            - |
+              # Warte bis Nextcloud installiert ist
+              while [ ! -f /var/www/html/config/config.php ]; do
+                echo "Warte auf Nextcloud-Installation..."
+                sleep 5
+              done
+              
+              # Installiere Collabora App
+              php /var/www/html/occ app:install richdocuments || true
+              php /var/www/html/occ app:enable richdocuments || true
+              
+              echo "Installiere Talk App..."
+              php /var/www/html/occ app:install spreed || true
+              php /var/www/html/occ app:enable spreed || true
+
+              echo "Konfiguriere Talk HPB..."
+              php /var/www/html/occ config:app:set spreed signaling_mode --value="external"
+              # KORREKTUR: Richtiges JSON-Format mit "servers" und "secret" Keys
+              php /var/www/html/occ config:app:set spreed signaling_servers --value='{"servers":[{"server":"http://192.168.178.63:30081","verify":false}],"secret":"495bc2e029ac8e5cd461a910bb7f48d10a10ece20e4de36f4b3ea8ed7cea029f"}'
+              
+              # Konfiguriere TURN Server
+              echo "Konfiguriere TURN Server..."
+              php /var/www/html/occ config:app:set spreed turn_servers --value='[{"schemes":"turn,turns","server":"192.168.178.63","port":"30478","secret":"0d3e50717c9fff2263babeec3a8b3b86e33252822162642cb35a758087fb76e0","protocols":"udp,tcp"}]'
+               
+              # Konfiguriere STUN Server
+              echo "Konfiguriere STUN Server..."
+              php /var/www/html/occ config:app:set spreed stun_servers --value='["192.168.178.63:30478"]'
+              
+              # Konfiguriere Collabora-Server
+              php /var/www/html/occ config:app:set richdocuments wopi_url --value="http://collabora.nextcloud.svc.cluster.local:9980"
+              
+              echo "Collabora konfiguriert!"
+          volumeMounts:
+            - name: html
+              mountPath: /var/www/html
+      
+      containers:
+        - name: nextcloud
+          image: nextcloud:31.0.4-apache
+          ports:
+            - containerPort: 80
+          env:
+            # Datenbank-Konfiguration
+            - name: MYSQL_HOST
+              value: mariadb.nextcloud.svc.cluster.local:3306
+            - name: MYSQL_DATABASE
+              value: nextcloud
+            - name: MYSQL_USER
+              value: nextcloud
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-db-secret
+                  key: password
+            
+            # Admin-User automatisch anlegen
+            - name: NEXTCLOUD_ADMIN_USER
+              value: admin
+            - name: NEXTCLOUD_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-admin-secret
+                  key: password
+            
+            # Automatische Installation aktivieren
+            - name: NEXTCLOUD_TRUSTED_DOMAINS
+              value: "192.168.178.63:30080 localhost nextcloud.nextcloud.svc.cluster.local"
+            - name: OVERWRITEHOST
+              value: "192.168.178.63:30080"
+            - name: OVERWRITEPROTOCOL
+              value: "http"
+            - name: OVERWRITECLIURL
+              value: "http://192.168.178.63:30080"
+            
+            # Redis-Konfiguration
+            - name: REDIS_HOST
+              value: nextcloud-redis.nextcloud.svc.cluster.local
+            - name: REDIS_HOST_PORT
+              value: "6379"
+            - name: REDIS_HOST_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: REDIS_PASSWORD
+          
+          volumeMounts:
+            - name: html
+              mountPath: /var/www/html
+            - name: collabora-config
+              mountPath: /var/www/html/config/collabora.config.php
+              subPath: collabora.config.php
+          
+          livenessProbe:
+            httpGet:
+              path: /status.php
+              port: 80
+              httpHeaders:
+                - name: Host
+                  value: "192.168.178.63:30080"
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          
+          readinessProbe:
+            httpGet:
+              path: /status.php
+              port: 80
+              httpHeaders:
+                - name: Host
+                  value: "192.168.178.63:30080"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+      
+      volumes:
+        - name: html
+          persistentVolumeClaim:
+            claimName: nextcloud-html
+        - name: collabora-config
+          configMap:
+            name: nextcloud-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nextcloud
+  namespace: nextcloud
+spec:
+  type: NodePort
+  selector:
+    app: nextcloud
+  ports:
+    - port: 80
+      targetPort: 80
+      nodePort: 30080

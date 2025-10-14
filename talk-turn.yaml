@@ -1,0 +1,39 @@
+# Talk TURN Service (TCP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: nextcloud-talk-turn-tcp
+  namespace: nextcloud
+  labels:
+    app: nextcloud-talk-hpb
+    component: turn-tcp
+spec:
+  type: NodePort
+  selector:
+    app: nextcloud-talk-hpb
+  ports:
+    - name: turn-tcp
+      port: 3478
+      targetPort: 3478
+      nodePort: 30478
+      protocol: TCP
+---
+# Talk TURN Service (UDP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: nextcloud-talk-turn-udp
+  namespace: nextcloud
+  labels:
+    app: nextcloud-talk-hpb
+    component: turn-udp
+spec:
+  type: NodePort
+  selector:
+    app: nextcloud-talk-hpb
+  ports:
+    - name: turn-udp
+      port: 3478
+      targetPort: 3478
+      nodePort: 30478
+      protocol: UDP

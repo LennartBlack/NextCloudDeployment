@@ -1,0 +1,50 @@
+# ConfigMap für MariaDB Init-Script
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mariadb-init-script
+  namespace: nextcloud
+  labels:
+    app.kubernetes.io/name: nextcloud
+    app.kubernetes.io/component: db
+data:
+  init.sql: |
+    CREATE DATABASE IF NOT EXISTS nextcloud;
+    CREATE USER IF NOT EXISTS 'nextcloud'@'%' IDENTIFIED BY 'nextcloud123';
+    GRANT ALL PRIVILEGES ON nextcloud.* TO 'nextcloud'@'%';
+    FLUSH PRIVILEGES;
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nextcloud-config
+  namespace: nextcloud
+data:
+  collabora.config.php: |
+    <?php
+    $CONFIG = array (
+      'richdocuments' => array(
+        'wopi_url' => 'http://192.168.178.63:30981',
+      ),
+    );
+# Nextcloud Talk App Konfiguration (ConfigMap)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nextcloud-talk-config
+  namespace: nextcloud
+data:
+  talk.config.php: |
+    <?php
+    $CONFIG = array(
+      'talk_internal_secret' => '90474c17177e328fc2289a1004354f9d7264aab953f642b23e3a4eac7e7b0fb7',
+      'turn_servers' => array(
+        array(
+          'schemes' => 'turn',
+          'server' => '192.168.178.63',
+          'port' => '30478',
+          'secret' => '0d3e50717c9fff2263babeec3a8b3b86e33252822162642cb35a758087fb76e0',
+          'protocols' => 'udp,tcp',
+        ),
+      ),
+    );
