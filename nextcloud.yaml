@@ -33,6 +33,7 @@ spec:
                 sleep 5
               done
               
+              echo "Konfiguriere Talk App - Signaling Mode..."
               php /var/www/html/occ config:app:set spreed signaling_mode --value="external"
               
               echo "Konfiguriere Trusted Proxies..."
@@ -57,6 +58,12 @@ spec:
 
               # Konfiguriere Collabora-Server
               php /var/www/html/occ config:app:set richdocuments wopi_url --value="http://collabora.nextcloud.svc.cluster.local:9980"
+
+              # HPB Signaling Server konfigurieren
+              php /var/www/html/occ config:app:set spreed signaling_servers --value='[{"server":"https://192.168.178.63:30444","verify":false}]'
+              
+              cho "Konfiguriere Talk App - TURN Server..."
+              php /var/www/html/occ config:app:set spreed turn_servers --value='[{"schemes":"turn","server":"192.168.178.63","port":"30478","secret":"0d3e50717c9fff2263babeec3a8b3b86e33252822162642cb35a758087fb76e0","protocols":"udp,tcp"}]'
               
               echo "Collabora konfiguriert!"
           volumeMounts:
