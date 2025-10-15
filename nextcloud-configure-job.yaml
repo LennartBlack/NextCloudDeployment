@@ -1,0 +1,71 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nextcloud-configure
+  namespace: nextcloud
+spec:
+  ttlSecondsAfterFinished: 300  # Job wird nach 5 Min automatisch gelöscht
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: configure
+          image: nextcloud:31.0.4-apache
+          command:
+            - sh
+            - -c
+            - |
+              echo "=== Nextcloud Konfiguration startet ==="
+              
+              # Warte bis config.php existiert (Nextcloud ist installiert)
+              echo "Warte auf Nextcloud-Installation..."
+              MAX_WAIT=300
+              ELAPSED=0
+              
+              while [ ! -f /var/www/html/config/config.php ]; do
+                if [ $ELAPSED -ge $MAX_WAIT ]; then
+                  echo "FEHLER: Timeout nach ${MAX_WAIT} Sekunden!"
+                  exit 1
+                fi
+                echo "Warte... ($ELAPSED/$MAX_WAIT)"
+                sleep 10
+                ELAPSED=$((ELAPSED + 10))
+              done
+              
+              echo "✓ config.php gefunden!"
+              
+              # Warte noch 10 Sekunden extra
+              echo "Warte 10 Sekunden extra für Stabilität..."
+              sleep 10
+              
+              echo "=== Konfiguriere Trusted Proxies ==="
+              php /var/www/html/occ config:system:set trusted_proxies 0 --value="10.0.0.0/8"
+              php /var/www/html/occ config:system:set trusted_proxies 1 --value="172.16.0.0/12"
+              php /var/www/html/occ config:system:set trusted_proxies 2 --value="192.168.0.0/16"
+              php /var/www/html/occ config:system:set forwarded_for_headers 0 --value="HTTP_X_FORWARDED_FOR"
+              
+              echo "=== Konfiguriere Trusted Domains ==="
+              php /var/www/html/occ config:system:set trusted_domains 0 --value="nextcloud.ewe-netz-backup.de"
+              php /var/www/html/occ config:system:set trusted_domains 1 --value="localhost"
+              php /var/www/html/occ config:system:set trusted_domains 2 --value="nextcloud.nextcloud.svc.cluster.local"
+              
+              echo "=== Installiere Collabora App ==="
+              php /var/www/html/occ app:install richdocuments || echo "Collabora bereits installiert"
+              php /var/www/html/occ app:enable richdocuments
+              
+              echo "=== Installiere Talk App ==="
+              php /var/www/html/occ app:install spreed || echo "Talk bereits installiert"
+              php /var/www/html/occ app:enable spreed
+              
+              echo "=== Konfiguriere Collabora ==="
+              php /var/www/html/occ config:app:set richdocuments wopi_url --value="https://collabora.ewe-netz-backup.de"
+              php /var/www/html/occ config:app:set richdocuments disable_certificate_verification --value="no"
+              
+              echo "=== ✓ Konfiguration abgeschlossen! ==="
+          volumeMounts:
+            - name: html
+              mountPath: /var/www/html
+      volumes:
+        - name: html
+          persistentVolumeClaim:
+            claimName: nextcloud-html

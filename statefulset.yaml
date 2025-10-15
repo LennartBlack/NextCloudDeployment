@@ -6,8 +6,12 @@ metadata:
   labels:
     app: mariadb
 spec:
-  serviceName: "mariadb"
-  replicas: 1
+  serviceName: mariadb-headless
+  podManagementPolicy: OrderedReady
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
   selector:
     matchLabels:
       app: mariadb

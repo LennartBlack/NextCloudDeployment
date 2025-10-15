@@ -4,7 +4,12 @@ metadata:
   name: nextcloud
   namespace: nextcloud
 spec:
-  replicas: 1
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
   selector:
     matchLabels:
       app: nextcloud
@@ -20,62 +25,6 @@ spec:
           volumeMounts:
             - name: html
               mountPath: /var/www/html
-        
-        - name: install-collabora-app
-          image: nextcloud:31.0.4-apache
-          command: 
-            - sh
-            - -c
-            - |
-              # Warte bis Nextcloud installiert ist
-              while [ ! -f /var/www/html/config/config.php ]; do
-                echo "Warte auf Nextcloud-Installation..."
-                sleep 5
-              done
-              
-              echo "Konfiguriere Talk App - Signaling Mode..."
-              php /var/www/html/occ config:app:set spreed signaling_mode --value="external"
-              
-              echo "Konfiguriere Trusted Proxies..."
-              php /var/www/html/occ config:system:set trusted_proxies 0 --value="10.0.0.0/8"
-              php /var/www/html/occ config:system:set trusted_proxies 1 --value="172.16.0.0/12"
-              php /var/www/html/occ config:system:set trusted_proxies 2 --value="192.168.0.0/16"
-              php /var/www/html/occ config:system:set forwarded_for_headers 0 --value="HTTP_X_FORWARDED_FOR"
-              
-              echo "Konfiguriere Trusted Domains..."
-              php /var/www/html/occ config:system:set trusted_domains 0 --value="192.168.178.63:30443"
-              php /var/www/html/occ config:system:set trusted_domains 1 --value="localhost"
-              php /var/www/html/occ config:system:set trusted_domains 2 --value="nextcloud.nextcloud.svc.cluster.local"
-              
-
-              # Installiere Collabora App
-              echo "Installiere Collabora App..."
-              php /var/www/html/occ app:install richdocuments || true
-              php /var/www/html/occ app:enable richdocuments || true
-              
-              echo "Installiere Talk App..."
-              php /var/www/html/occ app:install spreed || true
-              php /var/www/html/occ app:enable spreed || true
-
-              # Konfiguriere Collabora-Server (HTTPS!)
-              echo "Konfiguriere Collabora..."
-              php /var/www/html/occ config:app:set richdocuments wopi_url --value="https://192.168.178.63:30981"
-              php /var/www/html/occ config:app:set richdocuments disable_certificate_verification --value="yes"
-
-              # HPB Signaling Server konfigurieren
-              echo "Konfiguriere HPB Signaling Server..."
-              php /var/www/html/occ config:app:set spreed signaling_servers --value='{"servers":[{"server":"https://192.168.178.63:30444","verify":false}],"secret":"495bc2e029ac8e5cd461a910bb7f48d10a10ece20e4de36f4b3ea8ed7cea029f"}'
-              
-              echo "Setze Talk internal secret..."
-              php /var/www/html/occ config:app:set spreed internal_secret --value="90474c17177e328fc2289a1004354f9d7264aab953f642b23e3a4eac7e7b0fb7"
-
-              echo "Konfiguriere Talk App - TURN Server..."
-              php /var/www/html/occ config:app:set spreed turn_servers --value='[{"schemes":"turn","server":"192.168.178.63:30478","secret":"0d3e50717c9fff2263babeec3a8b3b86e33252822162642cb35a758087fb76e0","protocols":"udp,tcp"}]'
-
-              echo "Konfiguration abgeschlossen!"
-          volumeMounts:
-            - name: html
-              mountPath: /var/www/html
       
       containers:
         - name: nextcloud
@@ -83,7 +32,6 @@ spec:
           ports:
             - containerPort: 80
           env:
-            # Datenbank-Konfiguration
             - name: MYSQL_HOST
               value: mariadb.nextcloud.svc.cluster.local:3306
             - name: MYSQL_DATABASE
@@ -94,28 +42,22 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: nextcloud-db-secret
-                  key: password
-            
-            # Admin-User automatisch anlegen
+                  key: password            
             - name: NEXTCLOUD_ADMIN_USER
               value: admin
             - name: NEXTCLOUD_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: nextcloud-admin-secret
-                  key: password
-            
-            # Automatische Installation aktivieren
+                  key: password    
             - name: NEXTCLOUD_TRUSTED_DOMAINS
-              value: "192.168.178.63:30443 localhost nextcloud.nextcloud.svc.cluster.local"
+              value: "nextcloud.ewe-netz-backup.de localhost nextcloud.nextcloud.svc.cluster.local"
             - name: OVERWRITEHOST
-              value: "192.168.178.63:30443"
+              value: "nextcloud.ewe-netz-backup.de"
             - name: OVERWRITEPROTOCOL
               value: "https"
             - name: OVERWRITECLIURL
-              value: "https://192.168.178.63:30443"
-            
-            # Redis-Konfiguration
+              value: "https://nextcloud.ewe-netz-backup.de"      
             - name: REDIS_HOST
               value: nextcloud-redis.nextcloud.svc.cluster.local
             - name: REDIS_HOST_PORT
@@ -124,47 +66,42 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: redis-auth
-                  key: REDIS_PASSWORD
-          
+                  key: REDIS_PASSWORD          
           volumeMounts:
             - name: html
               mountPath: /var/www/html
             - name: collabora-config
               mountPath: /var/www/html/config/collabora.config.php
-              subPath: collabora.config.php
-          
+              subPath: collabora.config.php          
           livenessProbe:
             httpGet:
               path: /status.php
               port: 80
               httpHeaders:
                 - name: Host
-                  value: "192.168.178.63:30080"
-            initialDelaySeconds: 120
+                  value: "nextcloud.ewe-netz-backup.de"
+            initialDelaySeconds: 30
             periodSeconds: 30
             timeoutSeconds: 5
-            failureThreshold: 3
-          
+            failureThreshold: 3          
           readinessProbe:
             httpGet:
               path: /status.php
               port: 80
               httpHeaders:
                 - name: Host
-                  value: "192.168.178.63:30080"
+                  value: "nextcloud.ewe-netz-backup.de"
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 3
-          
+            failureThreshold: 3          
           resources:
             requests:
               cpu: 100m
-              memory: 512Mi
+              memory: 2Gi
             limits:
               cpu: 2000m
-              memory: 2Gi
-      
+              memory: 4Gi      
       volumes:
         - name: html
           persistentVolumeClaim:

@@ -6,7 +6,12 @@ metadata:
   labels:
     app: collabora
 spec:
-  replicas: 1
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
   selector:
     matchLabels:
       app: collabora
@@ -22,38 +27,28 @@ spec:
             - containerPort: 9980
               name: collabora
           env:
-            # WICHTIG: Erlaubte Nextcloud-Domains - HTTPS auf Port 30443
             - name: aliasgroup1
-              value: "https://192.168.178.63:30443"
-            
-            # Server-Name für externe Erreichbarkeit
+              value: "https://nextcloud.ewe-netz-backup.de"            
             - name: server_name
-              value: "192.168.178.63:30981"
-            
-            # SSL deaktivieren (wird durch NGINX Proxy gehandhabt)
+              value: "collabora.ewe-netz-backup.de"            
             - name: extra_params
-              value: "--o:ssl.enable=false --o:ssl.termination=true"
-            
+              value: "--o:ssl.enable=false --o:ssl.termination=true"            
             - name: DONT_GEN_SSL_CERT
-              value: "true"
-            
-            # Admin-Konsole
+              value: "true"            
             - name: username
               value: admin
             - name: password
               valueFrom:
                 secretKeyRef:
                   name: collabora-secret
-                  key: admin-password
-          
+                  key: admin-password          
           resources:
             requests:
               cpu: 500m
-              memory: 1Gi
+              memory: 2Gi
             limits:
               cpu: 2000m
-              memory: 2Gi
-          
+              memory: 4Gi          
           securityContext:
             capabilities:
               add:
@@ -67,7 +62,7 @@ metadata:
   labels:
     app: collabora
 spec:
-  type: ClusterIP  # Änderung: ClusterIP statt NodePort
+  type: ClusterIP
   selector:
     app: collabora
   ports:

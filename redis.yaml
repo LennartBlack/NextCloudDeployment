@@ -7,7 +7,12 @@ metadata:
     app.kubernetes.io/name: redis
     app.kubernetes.io/component: cache
 spec:
-  replicas: 1
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: redis
