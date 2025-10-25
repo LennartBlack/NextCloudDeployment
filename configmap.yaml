@@ -175,3 +175,44 @@ data:
         }
       }
     }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nextcloud-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  nextcloud-overview.json: |
+    {
+      "dashboard": {
+        "title": "Nextcloud Overview",
+        "panels": [
+          {
+            "title": "Active Users",
+            "targets": [
+              {
+                "expr": "nextcloud_active_users_total"
+              }
+            ]
+          },
+          {
+            "title": "Storage Usage",
+            "targets": [
+              {
+                "expr": "nextcloud_storage_usage_bytes"
+              }
+            ]
+          },
+          {
+            "title": "Database Size",
+            "targets": [
+              {
+                "expr": "mysql_global_status_innodb_data_written"
+              }
+            ]
+          }
+        ]
+      }
+    }

@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nextcloud-exporter
+  namespace: nextcloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nextcloud-exporter
+  template:
+    metadata:
+      labels:
+        app: nextcloud-exporter
+    spec:
+      containers:
+        - name: exporter
+          image: xperimental/nextcloud-exporter:0.7.0
+          ports:
+            - containerPort: 9205
+              name: metrics
+          env:
+            - name: NEXTCLOUD_SERVER
+              value: "http://nextcloud.nextcloud.svc.cluster.local"
+            - name: NEXTCLOUD_USERNAME
+              value: "admin"
+            - name: NEXTCLOUD_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-admin-secret
+                  key: password
+            - name: NEXTCLOUD_TIMEOUT
+              value: "10s"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nextcloud-exporter
+  namespace: nextcloud
+  labels:
+    app: nextcloud-exporter
+spec:
+  selector:
+    app: nextcloud-exporter
+  ports:
+    - name: metrics
+      port: 9205
+      targetPort: 9205
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nextcloud-exporter
+  namespace: nextcloud
+spec:
+  selector:
+    matchLabels:
+      app: nextcloud-exporter
+  endpoints:
+  - port: metrics
+    interval: 30s

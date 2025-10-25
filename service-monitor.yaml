@@ -1,0 +1,48 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nextcloud
+  namespace: nextcloud
+  labels:
+    app: nextcloud
+spec:
+  selector:
+    matchLabels:
+      app: nextcloud
+  endpoints:
+  - port: http
+    path: /ocs/v2.php/apps/serverinfo/api/v1/info
+    params:
+      format: ['json']
+    interval: 30s
+    scrapeTimeout: 10s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: mariadb
+  namespace: nextcloud
+  labels:
+    app: mariadb
+spec:
+  selector:
+    matchLabels:
+      app: mariadb
+  endpoints:
+  - port: mysql
+    interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: redis
+  namespace: nextcloud
+  labels:
+    app.kubernetes.io/name: redis
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  endpoints:
+  - port: redis
+    interval: 30s

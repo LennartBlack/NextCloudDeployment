@@ -47,6 +47,37 @@ spec:
             - name: initdb
               mountPath: /docker-entrypoint-initdb.d/
               readOnly: true
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+        
+        - name: mysql-exporter
+          image: prom/mysqld-exporter:v0.15.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9104
+              name: metrics
+          env:
+            - name: MYSQL_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-db-secret
+                  key: password
+          args:
+            - --mysqld.username=nextcloud
+            - --mysqld.address=localhost:3306
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      
       volumes:
         - name: initdb
           configMap:
@@ -54,6 +85,7 @@ spec:
             items:
               - key: init.sql
                 path: init.sql
+  
   volumeClaimTemplates:
     - metadata:
         name: mariadb-data

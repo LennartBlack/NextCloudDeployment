@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/name: redis
     app.kubernetes.io/component: cache
 spec:
-  replicas: 2
+  replicas: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -48,6 +48,27 @@ spec:
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits:   { cpu: 200m, memory: 256Mi }
+        - name: redis-exporter
+          image: oliver006/redis_exporter:v1.55.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9121
+              name: metrics
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: REDIS_PASSWORD
+            - name: REDIS_ADDR
+              value: "localhost:6379"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
 
 ---
 apiVersion: v1
@@ -64,4 +85,7 @@ spec:
     - name: redis
       port: 6379
       targetPort: 6379
+    - name: metrics
+      port: 9121
+      targetPort: 9121
   type: ClusterIP

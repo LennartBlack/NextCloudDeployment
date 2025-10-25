@@ -1,0 +1,83 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: nextcloud-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus
+spec:
+  groups:
+    - name: nextcloud
+      interval: 30s
+      rules:
+        # Nextcloud Pod Down
+        - alert: NextcloudDown
+          expr: up{job="nextcloud"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Nextcloud ist down"
+            description: "Nextcloud Pod ist seit 5 Minuten nicht erreichbar"
+
+        # Hohe Memory-Nutzung
+        - alert: NextcloudHighMemory
+          expr: |
+            container_memory_usage_bytes{namespace="nextcloud",pod=~"nextcloud-.*"} 
+            / container_spec_memory_limit_bytes{namespace="nextcloud",pod=~"nextcloud-.*"} > 0.9
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Nextcloud Memory-Nutzung > 90%"
+            description: "Pod {{ $labels.pod }} nutzt {{ $value | humanizePercentage }} Memory"
+
+        # MariaDB Down
+        - alert: MariaDBDown
+          expr: up{job="mariadb"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "MariaDB ist down"
+            description: "MariaDB ist seit 2 Minuten nicht erreichbar"
+
+        # Redis Down
+        - alert: RedisDown
+          expr: up{job="redis"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Redis ist down"
+
+        # Disk Space
+        - alert: NextcloudDiskSpaceLow
+          expr: |
+            (1 - kubelet_volume_stats_available_bytes{namespace="nextcloud"} 
+            / kubelet_volume_stats_capacity_bytes{namespace="nextcloud"}) > 0.85
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "PVC {{ $labels.persistentvolumeclaim }} > 85% voll"
+
+        # Collabora Down
+        - alert: CollaboraDown
+          expr: up{job="collabora"} == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Collabora Office ist down"
+
+        # TLS Certificate Expiry
+        - alert: CertificateExpiringSoon
+          expr: |
+            certmanager_certificate_expiration_timestamp_seconds{namespace="nextcloud"} 
+            - time() < 7 * 24 * 3600
+          labels:
+            severity: warning
+          annotations:
+            summary: "TLS Zertifikat läuft in 7 Tagen ab"
+            description: "{{ $labels.name }} läuft am {{ $value | humanizeTimestamp }} ab"
