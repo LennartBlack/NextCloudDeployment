@@ -1,0 +1,129 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: alertmanager-prometheus-kube-prometheus-alertmanager
+  namespace: monitoring
+type: Opaque
+stringData:
+  alertmanager.yaml: |
+    global:
+      resolve_timeout: 5m
+      smtp_from: 'lennart.schwartz@mailbox.org'
+      smtp_smarthost: 'smtp.mailbox.org:587'
+      smtp_auth_username: 'lennart.schwartz@mailbox.org'
+      smtp_auth_password: 'J0n4Kape!!e'
+      smtp_require_tls: true
+
+    route:
+      group_by: ['alertname', 'cluster', 'service']
+      group_wait: 10s
+      group_interval: 5m
+      repeat_interval: 4h
+      receiver: 'email-notifications'
+      
+      # Route critical alerts immediately
+      routes:
+        - match:
+            severity: critical
+          receiver: 'email-notifications'
+          group_wait: 10s
+          repeat_interval: 1h
+          
+        - match:
+            severity: warning
+          receiver: 'email-notifications'
+          group_wait: 30s
+          repeat_interval: 4h
+          
+        - match:
+            security: suspicious-activity
+          receiver: 'email-notifications'
+          group_wait: 10s
+          repeat_interval: 2h
+
+    receivers:
+      - name: 'email-notifications'
+        email_configs:
+          - to: 'lennart.schwartz@mailbox.org'
+            from: 'lennart.schwartz@mailbox.org'
+            smarthost: 'smtp.mailbox.org:587'
+            auth_username: 'lennart.schwartz@mailbox.org'
+            auth_password: 'J0n4Kape!!e'
+            require_tls: true
+            headers:
+              Subject: '[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .GroupLabels.alertname }}'
+            
+            html: |
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <style>
+                  body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                  .alert-container { background: #f5f5f5; padding: 20px; margin: 20px 0; border-radius: 5px; }
+                  .alert-firing { border-left: 5px solid #d32f2f; }
+                  .alert-resolved { border-left: 5px solid #388e3c; }
+                  .severity-critical { background: #ffebee; }
+                  .severity-warning { background: #fff3e0; }
+                  .severity-info { background: #e3f2fd; }
+                  h2 { margin-top: 0; color: #1976d2; }
+                  .label { display: inline-block; padding: 3px 8px; margin: 2px; background: #e0e0e0; border-radius: 3px; font-size: 12px; }
+                  .value { font-weight: bold; }
+                  .footer { margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666; }
+                </style>
+              </head>
+              <body>
+                <h1>Nextcloud Monitoring Alert</h1>
+                
+                {{ range .Alerts }}
+                <div class="alert-container alert-{{ .Status }} severity-{{ .Labels.severity }}">
+                  <h2>{{ .Labels.alertname }}</h2>
+                  
+                  <p><strong>Status:</strong> <span class="value">{{ .Status | toUpper }}</span></p>
+                  <p><strong>Severity:</strong> <span class="value">{{ .Labels.severity | toUpper }}</span></p>
+                  
+                  {{ if .Annotations.summary }}
+                  <p><strong>Summary:</strong><br>{{ .Annotations.summary }}</p>
+                  {{ end }}
+                  
+                  {{ if .Annotations.description }}
+                  <p><strong>Description:</strong><br>{{ .Annotations.description }}</p>
+                  {{ end }}
+                  
+                  <p><strong>Started at:</strong> {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}</p>
+                  
+                  {{ if .Labels }}
+                  <p><strong>Labels:</strong><br>
+                  {{ range .Labels.SortedPairs }}
+                    <span class="label">{{ .Name }}: {{ .Value }}</span>
+                  {{ end }}
+                  </p>
+                  {{ end }}
+                  
+                  {{ if eq .Status "resolved" }}
+                  <p><strong>Resolved at:</strong> {{ .EndsAt.Format "2006-01-02 15:04:05 MST" }}</p>
+                  {{ end }}
+                </div>
+                {{ end }}
+                
+                <div class="footer">
+                  <p>
+                    View in Prometheus: <a href="https://prometheus.ewe-netz-backup.de/alerts">https://prometheus.ewe-netz-backup.de/alerts</a><br>
+                    View in AlertManager: <a href="https://alertmanager.ewe-netz-backup.de">https://alertmanager.ewe-netz-backup.de</a>
+                  </p>
+                </div>
+              </body>
+              </html>
+
+    inhibit_rules:
+      # Inhibit info/warning alerts if critical alert is firing for same alertname
+      - source_match:
+          severity: 'critical'
+        target_match:
+          severity: 'warning'
+        equal: ['alertname', 'namespace']
+      
+      - source_match:
+          severity: 'critical'
+        target_match:
+          severity: 'info'
+        equal: ['alertname', 'namespace']

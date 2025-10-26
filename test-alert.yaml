@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: test-alert
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: test
+      interval: 10s
+      rules:
+        - alert: TestEmailAlert
+          expr: vector(1)
+          labels:
+            severity: warning
+          annotations:
+            summary: "Test alert for email notifications"
+            description: "This is a test. You can safely ignore this."

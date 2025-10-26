@@ -1,0 +1,160 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: nextcloud-alerts
+  namespace: nextcloud
+  labels:
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: nextcloud.availability
+      interval: 30s
+      rules:
+        - alert: NextcloudDown
+          expr: up{job="nextcloud-exporter"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            component: nextcloud
+          annotations:
+            summary: "Nextcloud instance is down"
+            description: "Nextcloud at {{ $labels.instance }} has been unreachable for more than 5 minutes."
+            
+        - alert: NextcloudExporterDown
+          expr: up{job="nextcloud-exporter"} == 0
+          for: 5m
+          labels:
+            severity: warning
+            component: monitoring
+          annotations:
+            summary: "Nextcloud exporter is down"
+            description: "The Nextcloud exporter has been down for more than 5 minutes. Metrics collection is failing."
+
+    - name: nextcloud.storage
+      interval: 60s
+      rules:
+        - alert: NextcloudLowStorage
+          expr: nextcloud_free_space_bytes < 10737418240  # 10GB
+          for: 10m
+          labels:
+            severity: warning
+            component: nextcloud
+          annotations:
+            summary: "Nextcloud storage running low"
+            description: "Nextcloud free storage space is {{ $value }} bytes (less than 10GB). Consider expanding storage."
+            
+        - alert: NextcloudCriticalStorage
+          expr: nextcloud_free_space_bytes < 5368709120  # 5GB
+          for: 5m
+          labels:
+            severity: critical
+            component: nextcloud
+          annotations:
+            summary: "Nextcloud storage critically low"
+            description: "Nextcloud free storage space is {{ $value }} bytes (less than 5GB). Immediate action required!"
+
+    - name: nextcloud.performance
+      interval: 60s
+      rules:
+        - alert: NextcloudHighMemoryUsage
+          expr: |
+            (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) 
+            * on(instance) group_left() 
+            (kube_pod_info{pod=~"nextcloud-.*", namespace="nextcloud"}) > 0.9
+          for: 10m
+          labels:
+            severity: warning
+            component: nextcloud
+          annotations:
+            summary: "Nextcloud pod using high memory"
+            description: "Nextcloud pod memory usage is above 90% for more than 10 minutes."
+            
+        - alert: NextcloudPodRestarting
+          expr: rate(kube_pod_container_status_restarts_total{namespace="nextcloud", pod=~"nextcloud-.*"}[15m]) > 0
+          for: 5m
+          labels:
+            severity: warning
+            component: nextcloud
+          annotations:
+            summary: "Nextcloud pod is restarting"
+            description: "Nextcloud pod {{ $labels.pod }} has restarted {{ $value }} times in the last 15 minutes."
+
+    - name: nextcloud.users
+      interval: 300s  # Check every 5 minutes
+      rules:
+        - alert: NextcloudNoActiveUsers
+          expr: nextcloud_active_users_hourly_total == 0 and hour() > 8 and hour() < 18
+          for: 2h
+          labels:
+            severity: info
+            component: nextcloud
+          annotations:
+            summary: "No active Nextcloud users during business hours"
+            description: "There have been no active users for 2 hours during business hours. This might indicate an access issue."
+
+    - name: nextcloud.database
+      interval: 300s
+      rules:
+        - alert: NextcloudDatabaseSizeGrowing
+          expr: |
+            (
+              nextcloud_database_size_bytes - 
+              nextcloud_database_size_bytes offset 7d
+            ) > 1073741824  # 1GB growth in 7 days
+          for: 1h
+          labels:
+            severity: info
+            component: nextcloud
+          annotations:
+            summary: "Nextcloud database growing rapidly"
+            description: "Database has grown by {{ $value }} bytes (over 1GB) in the last 7 days."
+
+        - alert: MariaDBDown
+          expr: up{job="mariadb"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            component: database
+          annotations:
+            summary: "MariaDB is down"
+            description: "MariaDB instance for Nextcloud has been down for more than 2 minutes."
+
+    - name: nextcloud.redis
+      interval: 60s
+      rules:
+        - alert: RedisDown
+          expr: up{job="redis"} == 0 or absent(up{job="redis"})
+          for: 2m
+          labels:
+            severity: warning
+            component: cache
+          annotations:
+            summary: "Redis cache is down"
+            description: "Redis cache for Nextcloud has been down for more than 2 minutes. Performance may be degraded."
+
+    - name: nextcloud.shares
+      interval: 3600s  # Check hourly
+      rules:
+        - alert: NextcloudUnsecuredShares
+          expr: nextcloud_shares_link_no_password_total > 10
+          for: 6h
+          labels:
+            severity: warning
+            component: nextcloud
+          annotations:
+            summary: "High number of unsecured public shares"
+            description: "There are {{ $value }} public shares without password protection. Review security policy."
+
+    - name: nextcloud.collabora
+      interval: 60s
+      rules:
+        - alert: CollaboraDown
+          expr: up{job="collabora"} == 0 or absent(up{job="collabora"})
+          for: 5m
+          labels:
+            severity: warning
+            component: collabora
+          annotations:
+            summary: "Collabora Office is down"
+            description: "Collabora Office service has been unreachable for more than 5 minutes. Document editing may not work."

@@ -1,0 +1,83 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: nextcloud-fallback-traffic-alerts
+  namespace: ingress-nginx
+  labels:
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: nextcloud.fallback.traffic
+      interval: 60s
+      rules:
+        - alert: NextcloudFallbackTrafficDetected
+          expr: |
+            sum(rate(nginx_ingress_controller_requests{host="nextcloud.ewe-netz-backup.de"}[5m])) > 0
+          for: 2m
+          labels:
+            severity: warning
+            component: nextcloud-fallback
+            security: suspicious-activity
+          annotations:
+            summary: "Traffic detected on Nextcloud fallback instance"
+            description: "The Nextcloud fallback instance at nextcloud.ewe-netz-backup.de has received {{ $value | humanize }} requests/sec in the last 5 minutes. This instance should have ZERO traffic. Investigate immediately for potential security breach or misconfiguration."
+            
+        - alert: NextcloudFallbackHighTraffic
+          expr: |
+            sum(rate(nginx_ingress_controller_requests{host="nextcloud.ewe-netz-backup.de"}[5m])) > 0.1
+          for: 1m
+          labels:
+            severity: critical
+            component: nextcloud-fallback
+            security: suspicious-activity
+          annotations:
+            summary: "HIGH traffic detected on Nextcloud fallback instance"
+            description: "The Nextcloud fallback instance at nextcloud.ewe-netz-backup.de has received {{ $value | humanize }} requests/sec in the last 5 minutes. This is unusually high for a fallback instance. IMMEDIATE investigation required!"
+
+        - alert: NextcloudFallbackMultipleRequests
+          expr: |
+            sum(increase(nginx_ingress_controller_requests{host="nextcloud.ewe-netz-backup.de"}[1h])) > 10
+          for: 5m
+          labels:
+            severity: warning
+            component: nextcloud-fallback
+            security: suspicious-activity
+          annotations:
+            summary: "Multiple requests to Nextcloud fallback instance"
+            description: "The Nextcloud fallback instance has received {{ $value }} requests in the last hour. This fallback instance should not be accessed. Check for: 1) DNS misconfiguration, 2) Users accidentally accessing wrong URL, 3) Potential attack or scanning."
+
+        - alert: NextcloudFallbackFailedRequests
+          expr: |
+            sum(rate(nginx_ingress_controller_requests{host="nextcloud.ewe-netz-backup.de", status=~"4.*|5.*"}[5m])) > 0
+          for: 2m
+          labels:
+            severity: info
+            component: nextcloud-fallback
+            security: suspicious-activity
+          annotations:
+            summary: "Failed requests on Nextcloud fallback instance"
+            description: "The Nextcloud fallback instance is receiving failed HTTP requests (4xx/5xx errors). Rate: {{ $value | humanize }} req/sec. This could indicate scanning/probing activity."
+
+        - alert: NextcloudFallbackDataTransfer
+          expr: |
+            sum(rate(nginx_ingress_controller_response_size_sum{host="nextcloud.ewe-netz-backup.de"}[5m])) > 1048576
+          for: 5m
+          labels:
+            severity: critical
+            component: nextcloud-fallback
+            security: data-exfiltration
+          annotations:
+            summary: "Large data transfer from Nextcloud fallback instance"
+            description: "The Nextcloud fallback instance is transferring {{ $value }} bytes/sec (over 1MB/sec). This could indicate unauthorized data access or exfiltration. IMMEDIATE investigation required!"
+
+        - alert: NGINXIngressControllerDown
+          expr: |
+            up{job="ingress-nginx"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            component: ingress
+          annotations:
+            summary: "NGINX Ingress Controller is down"
+            description: "The NGINX Ingress Controller has been down for more than 2 minutes. All ingress traffic is affected."

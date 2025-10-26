@@ -1,0 +1,38 @@
+﻿grafana:
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - grafana.ewe-netz-backup.de
+    tls:
+      - secretName: grafana-tls
+        hosts:
+          - grafana.ewe-netz-backup.de
+
+prometheus:
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - prometheus.ewe-netz-backup.de
+    tls:
+      - secretName: prometheus-tls
+        hosts:
+          - prometheus.ewe-netz-backup.de
+
+alertmanager:
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - alertmanager.ewe-netz-backup.de
+    tls:
+      - secretName: alertmanager-tls
+        hosts:
+          - alertmanager.ewe-netz-backup.de

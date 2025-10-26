@@ -1,8 +1,21 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nextcloud-exporter-secret
+  namespace: nextcloud
+type: Opaque
+stringData:
+  username: "monitoring"  # Your monitoring user
+  password: "31012026Bachelor"  # Change this to your actual password
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: nextcloud-exporter
   namespace: nextcloud
+  labels:
+    app: nextcloud-exporter
 spec:
   replicas: 1
   selector:
@@ -14,29 +27,49 @@ spec:
         app: nextcloud-exporter
     spec:
       containers:
-        - name: exporter
-          image: xperimental/nextcloud-exporter:0.7.0
+        - name: nextcloud-exporter
+          image: xperimental/nextcloud-exporter:latest
           ports:
             - containerPort: 9205
               name: metrics
+              protocol: TCP
           env:
             - name: NEXTCLOUD_SERVER
               value: "http://nextcloud.nextcloud.svc.cluster.local"
             - name: NEXTCLOUD_USERNAME
-              value: "admin"
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-exporter-secret
+                  key: username
             - name: NEXTCLOUD_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: nextcloud-admin-secret
+                  name: nextcloud-exporter-secret
                   key: password
             - name: NEXTCLOUD_TIMEOUT
               value: "10s"
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: 9205
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: 9205
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
           resources:
             requests:
               cpu: 50m
               memory: 64Mi
             limits:
-              cpu: 100m
+              cpu: 200m
               memory: 128Mi
 ---
 apiVersion: v1
@@ -47,22 +80,29 @@ metadata:
   labels:
     app: nextcloud-exporter
 spec:
+  type: ClusterIP
   selector:
     app: nextcloud-exporter
   ports:
-    - name: metrics
-      port: 9205
+    - port: 9205
       targetPort: 9205
+      protocol: TCP
+      name: metrics
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: nextcloud-exporter
   namespace: nextcloud
+  labels:
+    app: nextcloud-exporter
+    release: prometheus  # This label is important for Prometheus to discover the ServiceMonitor
 spec:
   selector:
     matchLabels:
       app: nextcloud-exporter
   endpoints:
-  - port: metrics
-    interval: 30s
+    - port: metrics
+      interval: 30s
+      path: /metrics
+      scheme: http

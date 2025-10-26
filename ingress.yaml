@@ -15,7 +15,7 @@ spec:
   tls:
     - hosts:
         - nextcloud.ewe-netz-backup.de
-      secretName: nextcloud-tls  # ← cert-manager erstellt das automatisch!
+      secretName: nextcloud-tls
   rules:
     - host: nextcloud.ewe-netz-backup.de
       http:
